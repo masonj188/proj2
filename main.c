@@ -4,6 +4,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include "aes.h"
+#include <string.h>
+#include <openssl/rand.h>
+#include <openssl/sha.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+int playing = 0;
 
 char* title =
 "\n\n\n\n\n"
@@ -25,9 +35,11 @@ char* GO =
 " \\____/\\_| |_/\\_|  |_/\\____/   \\___/  \\___/\\____/\\_| \\_|\n"
 "\n\n\n\n\n";
 
-typedef struct Shop {
-
-} shop;
+typedef struct Output {
+	char CharName[20];
+	unsigned char *EncryptedBuffer;
+	char IV[16];
+} output;
 
 
 /******* ITEM DETAILS ******* 
@@ -66,12 +78,177 @@ typedef struct Backpack {
 
 typedef struct Character {
 	char name[20];
-
+	char pass[20];
 	int hp;
 	backpack bag;
 	status curStatus;
-	
 } character;
+
+
+int checkNameExists(char* name) {
+	int exists = 1;
+	int sock = 0, valread; 
+    struct sockaddr_in serv_addr; 
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
+    { 
+        printf("\n Socket creation error \n"); 
+        return -1; 
+    } 
+   
+    serv_addr.sin_family = AF_INET; 
+    serv_addr.sin_port = htons(13339);
+       
+    // Convert IPv4 and IPv6 addresses from text to binary form 
+    if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr)<=0)  
+    { 
+        printf("\nInvalid address/ Address not supported \n"); 
+        return -1; 
+    } 
+   
+    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
+    { 
+        printf("\nConnection Failed \n");
+		return -1;
+    } 
+    send(sock, name, strlen(name), 0); 
+    printf("Sent the name.\n");
+	recv(sock, &exists, sizeof(int), 0);
+	close(sock);
+
+	return exists;
+
+}
+
+character receiveAndDecrypt(char* name, char* key) {
+	unsigned char* receiveBuf = (unsigned char*)malloc(132);
+	int sock = 0, valread; 
+    struct sockaddr_in serv_addr; 
+	character failCharacter = {"", "", 0, {0, 0, 0, {0, 0, 0, 0}}};
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
+    { 
+        printf("\n Socket creation error \n"); 
+        return failCharacter; 
+    } 
+   
+    serv_addr.sin_family = AF_INET; 
+    serv_addr.sin_port = htons(13338); 
+       
+    // Convert IPv4 and IPv6 addresses from text to binary form 
+    if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr)<=0)  
+    { 
+        printf("\nInvalid address/ Address not supported \n"); 
+        return failCharacter; 
+    } 
+   
+    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
+    { 
+        printf("\nConnection Failed \n");
+		return failCharacter;
+    } 
+    send(sock, name, strlen(name), 0);
+	printf("Sent the name\n");
+	recv(sock, receiveBuf, 132, 0); 
+    printf("Received the Buffer.\n"); 
+	close(sock);
+	
+
+	// Hash the key
+
+	unsigned char md[32];
+	SHA256_CTX sctx;
+	SHA256_Init(&sctx);
+	SHA256_Update(&sctx, key, strlen(key));
+	SHA256_Final(md, &sctx);
+
+	// Decrypt the player buffer
+
+	unsigned char* decryptBuf = (unsigned char*)malloc(96);
+	char IV[16];
+	memcpy(IV, receiveBuf+116, 16);
+	memcpy(decryptBuf, receiveBuf+20, 96);
+	struct AES_ctx ctx;
+	AES_init_ctx_iv(&ctx, md, IV);
+	AES_CBC_decrypt_buffer(&ctx, decryptBuf, 96);
+
+
+	// Put data from buffer into character
+
+	character receivedPlayer;
+	memcpy(&receivedPlayer, decryptBuf, sizeof(character));
+
+
+	free(decryptBuf);
+	free(receiveBuf);
+
+	return receivedPlayer;
+}
+
+void encryptAndSend(character player, char* key) {
+
+	unsigned char md[32];
+	SHA256_CTX sctx;
+	SHA256_Init(&sctx);
+	SHA256_Update(&sctx, key, strlen(key));
+	SHA256_Final(md, &sctx);
+
+	output toSend = {"0", "0", "AAAAAAAAAAAAAAA"};
+	memcpy(toSend.CharName, player.name, 20);
+	RAND_load_file("/dev/random", 32);
+	RAND_bytes(toSend.IV, 16); //16 random bytes
+	unsigned char *buffer = (char*)malloc(96);
+	//	toSend.EncryptedBuffer = (char*)malloc(sizeof(player));
+	memcpy(buffer, (const void*)&player, sizeof(player));
+	memset(buffer+sizeof(player), 48, 96-sizeof(player));
+	// send
+
+	struct AES_ctx ctx;
+	AES_init_ctx_iv(&ctx, md, toSend.IV);
+	AES_CBC_encrypt_buffer(&ctx, buffer, 96);
+	toSend.EncryptedBuffer = buffer;
+
+	unsigned char* sendBuffer = (char*)malloc(132);
+
+	//printf("Size of SendBuffer: %d\n", sizeof(sendBuffer));
+	memcpy(sendBuffer, toSend.CharName, 20);
+	memcpy(sendBuffer+20, toSend.EncryptedBuffer, 96);
+	memcpy(sendBuffer+116, &toSend.IV, 16);
+
+
+
+
+	int sock = 0, valread; 
+    struct sockaddr_in serv_addr; 
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
+    { 
+        printf("\n Socket creation error \n"); 
+        return; 
+    } 
+   
+    serv_addr.sin_family = AF_INET; 
+    serv_addr.sin_port = htons(13337); 
+       
+    // Convert IPv4 and IPv6 addresses from text to binary form 
+    if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr)<=0)  
+    { 
+        printf("\nInvalid address/ Address not supported \n"); 
+        return; 
+    } 
+   
+    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
+    { 
+        printf("\nConnection Failed \n");
+		return;
+    } 
+    send(sock, sendBuffer, 132, 0); 
+    printf("Sent the buffer.\n"); 
+	close(sock);
+    //valread = read( sock , buffer, 1024); 
+    //printf("%s\n",buffer ); 
+
+
+	free(buffer);
+	free(sendBuffer);
+}
 
 void printDeathAndExit() {
 	printf("You've been slain... \n\n");
@@ -317,20 +494,96 @@ int checkForBetterArmor(character player, int index){
 	}
 }
 
+character login(){
+	char name[20];
+	char pass[20];
+	character null = {"", "", 0, {0, 0, 0, {0, 0, 0, 0}}};
+	printf("Enter Player name:\n");
+	gets(name);
+	name[19] = '\0';
+	//check player name exists
+
+	printf("Enter password: ");
+	gets(pass);
+	if(strlen(pass) > 19) {
+		pass[19] = '\0';
+	}
+	character returnedChar = receiveAndDecrypt(name, pass);
+	//check if correct password
+	if(strcmp(returnedChar.name, name) == 0) {
+		playing = 1;
+	}
+	else{
+		printf("Failed login attempt\n\n");
+	}
+	return returnedChar;
+}
+
+character createNewCharacter(){
+	char input[20];
+	char pass[20];
+	character new = {"", "", 100, {100, 0, 0, {0, 0, 0, 0}}};
+	int taken = 1;
+	printf("Enter Player name:\n");
+	gets(input);
+	input[19] = '\0';
+	//check if name already taken
+	taken = checkNameExists(input);
+
+	if(taken) {
+		printf("Character name already taken!\n\n");
+		return new;
+	}
+	memcpy(new.name, input, 20);
+		
+	printf("Enter a password: ");
+	gets(pass);
+
+	if(strlen(pass) > 19) {
+		pass[19] = '\0';
+	}
+
+	memcpy(new.pass, pass, 20);
+	
+	playing = 1;
+	return new;
+}
+
 int main() {
 	//login(); stub
 	puts(title);
 	puts(" ");
-	character player = {"Josh", 100, {100, 0, 0, {0, 5, 0, 0}}};
+	character player;
 	char input[8];
 
-	while(1){
+	while(!playing){
+		printf("Welcome to Dungeons & Deadlines!\n");
+		printf("1. Log in to an existing character\n");
+		printf("2. Create a new character\n");
+
+		gets(input);
+
+		switch (atoi(input)) {
+			case 1:
+				player = login();
+
+				break;
+			case 2:
+				player = createNewCharacter();
+				break;
+			default:
+				printf("Invalid response!\n");
+				break;
+		}
+	}
+
+	while(playing){
 		printf("What would you like to do next?\n");
-		printf("1. Go on adventure\n");
+		printf("1. Go on an adventure\n");
 		printf("2. Visit the shop\n");
 		printf("3. Use an item\n");
 		printf("4. Check character status\n");
-		printf("5. Go to sleep (log out)\n");
+		printf("5. Go to sleep (save and log out)\n");
 		gets(input);
 		printf("\n");
 
@@ -650,6 +903,7 @@ int main() {
 				break;
 			case 5:
 				//logout(player)
+				encryptAndSend(player, player.pass);
 				exit(0);
 			default:
 				printf("Invalid input!\n");
