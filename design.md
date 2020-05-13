@@ -1,1 +1,14 @@
 # Project 2 Design Document
+
+## Client Side
+To minimize the chances that someone would be able to modify their characters stats/inventory, we decided to have a client/server model that stores the character's data on the server instead of locally.  This way, when someone logs in to a character, they aren't pulling from a (potentially modified) local store, but from the network itself.  Unfortunately, it's still possible to manipulate values in memory during run-time; in order to eliminate that, we'd have to talk with the server each time we wanted to perform an action, and then have the server do the calculations and give the result of the action (just information on what happened) back to the client.  We werent ambitious enough to implement an entire protocol to talk between the client and server (I mean, we're using C after all) but we did move most of the important stuff to the server side.
+
+The client keeps a run-time record of the character's stats and inventory in memory, and then send that information over to the server when the character is logged out. The client also defines what the character is; i.e. the structs for character and inventory are defined within the client. The client also calculates the probability of completing a mission, so if you were to attach a debugger and modify the return values of the probability functions, you could likely give yourself a 100% chance to win any mission.  We could solve this by calculating probabilities and calculating the result of that probability completely server-side, which we intend to do later.
+
+
+## Server Side
+The server side is very very simple, it stores a representation of a character in a file when someone logs out, and gives back that representation when the client logs in.  One thing we did work in is that the server has no knowledge of the structure of the character, it only receives an encrypted buffer, the key of which is only used on the client side.  We'd have to modify the server quite a bit if we wanted to start doing calculations on the server side since as of now, it doesn't know much other that the name of the character it is storing information for.
+
+Another function of the server is to make sure that the clients connected to it only create characters with unique names.  During character creation on the client, it asks the server whether or not the name is unique, and if it isn't the client cannot create that character.  This makes it (hopefully) safer for multiple clients to play on a single server.  It also means that all necessary data is stored on the server, so you don't need to move any saved data between computers.  As long as each client is talking to the same server, you can access your character from any client without transferring any data.
+
+We used AES-256 encryption to encrypt the character data before it is transferred across the network, the key of which is the hashed password the user enters.
