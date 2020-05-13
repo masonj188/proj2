@@ -122,6 +122,7 @@ int main()
         }
 
     }
+
     PID = fork();
     if(PID == 0) {
         // IN CHILD - PORT 13338 SEND BACK FILE
@@ -175,12 +176,12 @@ int main()
             recv(connfd, &name, 20, 0);
             printf("Received Name: %s\n", name);
 
-            char filename[50] = { 0 };
-            sprintf(filename, "%s.DnD", name);
+            char filename[150] = { '\0' };
             //printf("%s\n", filename);
             char cwd[100];
             getcwd(cwd, 100);
-            //printf("%s", cwd);
+            sprintf(filename, "%s/%s.DnD", cwd, name);
+            printf("%s\n", filename);
             char sendBuffer[132];
             FILE* pFile;
             errno = 0;
@@ -203,9 +204,7 @@ int main()
             close(connfd);
         }
     }
-
     
-
     int sockfd, connfd, len; 
     struct sockaddr_in servaddr, cli; 
 

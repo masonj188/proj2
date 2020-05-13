@@ -499,12 +499,14 @@ character login(){
 	char pass[20];
 	character null = {"", "", 0, {0, 0, 0, {0, 0, 0, 0}}};
 	printf("Enter Player name:\n");
-	gets(name);
-	name[19] = '\0';
+	fgets(name, 20, stdin);
+	strtok(name, "\n");
+	//name[19] = '\0';
 	//check player name exists
 
 	printf("Enter password: ");
-	gets(pass);
+	fgets(pass, 20, stdin);
+	strtok(pass, "\n");
 	if(strlen(pass) > 19) {
 		pass[19] = '\0';
 	}
@@ -525,8 +527,8 @@ character createNewCharacter(){
 	character new = {"", "", 100, {100, 0, 0, {0, 0, 0, 0}}};
 	int taken = 1;
 	printf("Enter Player name:\n");
-	gets(input);
-	input[19] = '\0';
+	fgets(input, 20, stdin);
+	strtok(input, "\n");
 	//check if name already taken
 	taken = checkNameExists(input);
 
@@ -537,7 +539,8 @@ character createNewCharacter(){
 	memcpy(new.name, input, 20);
 		
 	printf("Enter a password: ");
-	gets(pass);
+	fgets(pass, 20, stdin);
+	strtok(pass, "\n");
 
 	if(strlen(pass) > 19) {
 		pass[19] = '\0';
@@ -561,7 +564,7 @@ int main() {
 		printf("1. Log in to an existing character\n");
 		printf("2. Create a new character\n");
 
-		gets(input);
+		fgets(input, 8, stdin);
 
 		switch (atoi(input)) {
 			case 1:
@@ -584,7 +587,7 @@ int main() {
 		printf("3. Use an item\n");
 		printf("4. Check character status\n");
 		printf("5. Go to sleep (save and log out)\n");
-		gets(input);
+		fgets(input, 8, stdin);
 		printf("\n");
 
 		switch (atoi(input)) {
@@ -595,7 +598,7 @@ int main() {
 				printf("3. Hard - %.0lf%% chance of success\n", 10.0+(6*getAP(player)));
 				printf("4. Return to previous menu\n");
 				
-				gets(input);
+				fgets(input, 8, stdin);
 				printf("\n");
 
 				switch (atoi(input)) {
@@ -633,7 +636,7 @@ int main() {
 				printf("3. Potions\n");
 				printf("4. Return to previous menu\n");
 				
-				gets(input);
+				fgets(input, 8, stdin);
 				printf("\n");
 
 				switch (atoi(input)) {
@@ -644,7 +647,7 @@ int main() {
 						}
 						printf("%d. Return to main menu\n",sizeof(wepCosts)/sizeof(int));
 
-						gets(input);
+						fgets(input, 8, stdin);
 						
 						switch (atoi(input)) {
 							case 1:
@@ -751,7 +754,7 @@ int main() {
 						}
 						printf("%d. Return to main menu\n",sizeof(armorCosts)/sizeof(int));
 
-						gets(input);
+						fgets(input, 8, stdin);
 
 						switch (atoi(input)) {
 							case 1:
@@ -819,7 +822,7 @@ int main() {
 						}
 						printf("%d. Return to main menu\n",sizeof(potCosts)/sizeof(int));
 						
-						gets(input);
+						fgets(input, 8, stdin);
 						switch (atoi(input)) {
 							case 1:
 								if(checkForGold(player,potCosts[atoi(input)])){
@@ -879,7 +882,7 @@ int main() {
 					printf("%d. %s\n", j, potTypes[j]);
 				}
 				printf("%d. Return to Main Menu\n", sizeof(potTypes)/sizeof(potTypes[0]));
-				gets(input);
+				fgets(input, 8, stdin);
 				switch(atoi(input)) {
 					case 1:
 						usePot(&player, atoi(input));
